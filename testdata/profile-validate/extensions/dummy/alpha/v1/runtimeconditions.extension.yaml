@@ -1,0 +1,46 @@
+apiVersion: runtimeconditions.io/v1alpha1
+kind: RuntimeConditionsExtensionDefinition
+metadata:
+  id: https://example.test/dummy/alpha/v1/runtimeconditions.extension.yaml
+  version: v1
+spec:
+  kinds:
+  - name: widget
+  interfaceTypes:
+  - {name: plain, targetKind: widget}
+  - {name: listy, targetKind: widget}
+  interfaceFields:
+  - {name: mode, targetKind: widget, targetType: plain}
+  - {name: spec, targetKind: widget, targetType: plain}
+  - {name: note, targetKind: widget, targetType: plain}
+  - {name: tags, targetKind: widget, targetType: listy}
+  - {name: items, targetKind: widget, targetType: listy}
+  conditionFields:
+  - {name: settings, appliesToKinds: [widget], appliesToInterfaceTypes: [plain, listy]}
+  fieldValues:
+  - {field: interface.mode, targetKind: widget, targetType: plain, values: [fast, slow]}
+  - {field: interface.spec.format, targetKind: widget, targetType: plain, values: [yaml, json]}
+  - {field: 'interface.tags[]', targetKind: widget, targetType: listy, values: [red, blue]}
+  - {field: 'interface.items[].part', targetKind: widget, targetType: listy, values: [a, b]}
+  - {field: 'interface.items[].size', targetKind: widget, targetType: listy, values: [small, large]}
+  - {field: 'settings.env[].property', targetKind: widget, targetType: plain, values: [host, port]}
+  - {field: 'settings.alternatives[].env[].property', targetKind: widget, targetType: plain, values: [host, port]}
+  - {field: 'settings.env[].property', targetKind: widget, targetType: listy, values: [host, port]}
+  schemas:
+  - id: widget-plain
+    appliesToKind: widget
+    appliesToInterfaceType: plain
+    description: A plain widget names its mode, and nothing is added to its interface.
+    schema:
+      $schema: https://json-schema.org/draft/2020-12/schema
+      type: object
+      properties:
+        interface:
+          type: object
+          required: [type, mode]
+          properties:
+            type: {const: plain}
+            mode: {type: string}
+            spec: {type: object}
+            note: {type: string}
+          additionalProperties: false

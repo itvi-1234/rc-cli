@@ -44,15 +44,14 @@ available under `rc profile go`, with identical flags and behavior:
 | `rc profile validate-extension` | Validate one imported binding package selected with `--package`. |
 | `rc profile version` | Show the linked Go profiler version. |
 
-A profile does not have to come from a profiler. To check one written by hand, or by
-an agent, against the extensions it declares (their definitions are downloaded from
-their https ids, or read from `--catalog` directories):
+A profile does not have to come from a profiler. To check one written by hand, or by an agent:
 
 ```sh
 ./rc profile validate profile.yaml
 ```
 
-This checks the extension vocabulary and schemas, not the core profile fields.
+It is checked against the core profile schema embedded in rc and against the definitions of the
+extensions it declares (downloaded from their ids, or read from `--catalog` directories).
 
 For command help:
 
