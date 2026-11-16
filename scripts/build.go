@@ -71,9 +71,10 @@ func build() error {
 	if err := os.MkdirAll(filepath.Dir(*output), 0755); err != nil {
 		return err
 	}
+	encoded := base64.StdEncoding.EncodeToString(schema)
 	linkerFlags := "-X main.version=" + *version + " -X main.commit=" + *commit +
-		" -X github.com/runtimeconditions/go-rc-profiler/extensioncheck.installedCoreSchemaBase64=" +
-		base64.StdEncoding.EncodeToString(schema)
+		" -X github.com/runtimeconditions/go-rc-profiler/extensioncheck.installedCoreSchemaBase64=" + encoded +
+		" -X github.com/runtimeconditions/rc-cli/internal/validate.coreSchemaBase64=" + encoded
 	command := exec.Command("go", "build", "-trimpath", "-ldflags", linkerFlags, "-o", *output, "./cmd/rc")
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return command.Run()

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/runtimeconditions/go-rc-profiler/extensioncheck"
+	"github.com/runtimeconditions/rc-cli/internal/validate"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
@@ -32,10 +32,8 @@ type profileValidateAPI struct {
 
 func linkedProfileValidateAPI() profileValidateAPI {
 	return profileValidateAPI{
-		Validate: func(profile []byte, catalogRoots []string) error {
-			return extensioncheck.ValidateProfileYAML(profile, extensioncheck.ProfileOptions{CatalogRoots: catalogRoots})
-		},
-		Client: &http.Client{Timeout: 20 * time.Second},
+		Validate: validate.Profile,
+		Client:   &http.Client{Timeout: 20 * time.Second},
 	}
 }
 
@@ -48,8 +46,8 @@ func newProfileValidateCommand(api profileValidateAPI) *cobra.Command {
 			"By default the extension definitions are downloaded from the https ids the profile names, " +
 			"including their dependencies. With --catalog the definitions are read from local directories " +
 			"instead and nothing is downloaded. Use - to read the profile from standard input.\n\n" +
-			"This checks the profile against the extension vocabulary and schemas. It does not check the " +
-			"core profile fields (apiVersion, metadata, workload) against the core schema.",
+			"The profile is checked against the core profile schema embedded in rc, and as data against what " +
+			"its extensions define, so the result does not depend on which tool or language produced it.",
 		Example:           "  rc profile validate profile.yaml\n  rc profile validate profile.yaml --catalog ./extensions",
 		Args:              usageArgs(cobra.ExactArgs(1)),
 		ValidArgsFunction: cobra.NoFileCompletions,

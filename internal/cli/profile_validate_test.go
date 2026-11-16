@@ -12,34 +12,37 @@ import (
 	"testing"
 )
 
+// The command is tested with two made-up extensions, so these tests do not depend on any real
+// extension or on which version of it exists. How the validator treats extensions is tested in
+// internal/validate.
 const (
-	commonShort = "https://runtimeconditions.io/extensions/rc/common-integrations:v1alpha2"
-	envShort    = "https://runtimeconditions.io/extensions/rc/env-configuration:v1alpha2"
-	validHTTP   = `apiVersion: runtimeconditions.io/v1alpha1
+	alphaRef = "https://example.test/dummy/alpha:v1"
+	betaRef  = "https://example.test/dummy/beta:v2"
+
+	validProfile = `apiVersion: runtimeconditions.io/v1alpha1
 kind: RuntimeConditionsProfile
-metadata: {name: orders}
-workload: {uri: "https://example.test/orders"}
+metadata: {name: shapes}
+workload: {uri: "https://example.test/shapes"}
 extensions:
-  - ` + commonShort + `
-  - ` + envShort + `
+  - ` + alphaRef + `
+  - ` + betaRef + `
 conditions:
-  - kind: cache
-    interface: {type: key_value, engine: redis}
-    configuration:
-      env:
-        - {property: url, name: REDIS_URL}
+  - kind: widget
+    interface: {type: plain, mode: fast}
+  - kind: gadget
+    interface: {type: strict, operations: [read, write]}
 `
 )
 
 var fixtureRoot = filepath.Join("..", "..", "testdata", "profile-validate", "extensions")
 
-// definitionServer serves the committed extension definitions for https://runtimeconditions.io/extensions/.
+// definitionServer serves the committed definitions for https://example.test/.
 type definitionServer struct{ requests []string }
 
 func (s *definitionServer) RoundTrip(request *http.Request) (*http.Response, error) {
 	s.requests = append(s.requests, request.URL.String())
 	status, body := http.StatusNotFound, "not found"
-	const prefix = "https://runtimeconditions.io/extensions/"
+	const prefix = "https://example.test/"
 	if address := request.URL.String(); strings.HasPrefix(address, prefix) {
 		if data, err := os.ReadFile(filepath.Join(fixtureRoot, filepath.FromSlash(strings.TrimPrefix(address, prefix)))); err == nil {
 			status, body = http.StatusOK, string(data)
@@ -70,7 +73,7 @@ func runProfileValidate(t *testing.T, transport http.RoundTripper, profile strin
 
 func TestValidateAcceptsAProfileAndDownloadsItsExtensionsAndDependencies(t *testing.T) {
 	server := &definitionServer{}
-	stderr, err := runProfileValidate(t, server, validHTTP)
+	stderr, err := runProfileValidate(t, server, validProfile)
 	if err != nil {
 		t.Fatalf("a valid profile was rejected: %v", err)
 	}
@@ -82,23 +85,38 @@ func TestValidateAcceptsAProfileAndDownloadsItsExtensionsAndDependencies(t *test
 	}
 }
 
-func TestValidateRejectsAValueTheExtensionDoesNotAllow(t *testing.T) {
-	_, err := runProfileValidate(t, &definitionServer{}, strings.Replace(validHTTP, "engine: redis", "engine: oracle", 1))
-	if err == nil || !strings.Contains(err.Error(), "oracle") {
-		t.Fatalf("expected the engine to be rejected, got %v", err)
+func TestValidateDownloadsADefinitionOnceWhenItIsNamedInTwoWays(t *testing.T) {
+	// beta depends on alpha by its full id, and the profile names alpha by its short form.
+	server := &definitionServer{}
+	if _, err := runProfileValidate(t, server, validProfile); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]int{}
+	for _, request := range server.requests {
+		seen[request]++
+	}
+	if seen["https://example.test/dummy/alpha/v1/runtimeconditions.extension.yaml"] < 1 {
+		t.Fatalf("alpha was not downloaded: %v", server.requests)
 	}
 }
 
-func TestValidateRejectsConfigurationWhenItsExtensionIsNotDeclared(t *testing.T) {
-	withoutEnv := strings.Replace(validHTTP, "  - "+envShort+"\n", "", 1)
-	_, err := runProfileValidate(t, &definitionServer{}, withoutEnv)
-	if err == nil || !strings.Contains(err.Error(), "configuration") {
-		t.Fatalf("expected configuration to be rejected without env-configuration, got %v", err)
+func TestValidateRejectsAValueTheExtensionDoesNotAllow(t *testing.T) {
+	_, err := runProfileValidate(t, &definitionServer{}, strings.Replace(validProfile, "mode: fast", "mode: turbo", 1))
+	if err == nil || !strings.Contains(err.Error(), "turbo") {
+		t.Fatalf("expected the mode to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsAConditionWhoseExtensionIsNotDeclared(t *testing.T) {
+	withoutBeta := strings.Replace(validProfile, "  - "+betaRef+"\n", "", 1)
+	_, err := runProfileValidate(t, &definitionServer{}, withoutBeta)
+	if err == nil || !strings.Contains(err.Error(), "kind gadget") {
+		t.Fatalf("expected the gadget kind to be unknown without beta, got %v", err)
 	}
 }
 
 func TestValidateSaysHowToProceedWhenADefinitionCannotBeDownloaded(t *testing.T) {
-	profile := strings.Replace(validHTTP, "common-integrations:v1alpha2", "missing:v9", 1)
+	profile := strings.Replace(validProfile, "dummy/alpha:v1", "dummy/missing:v9", 1)
 	_, err := runProfileValidate(t, &definitionServer{}, profile)
 	if err == nil || !strings.Contains(err.Error(), "404") || !strings.Contains(err.Error(), "--catalog") {
 		t.Fatalf("expected a download error that mentions --catalog, got %v", err)
@@ -106,7 +124,7 @@ func TestValidateSaysHowToProceedWhenADefinitionCannotBeDownloaded(t *testing.T)
 }
 
 func TestValidateDownloadsOnlyOverHTTPS(t *testing.T) {
-	profile := strings.Replace(validHTTP, "https://runtimeconditions.io/extensions/rc/common-integrations:v1alpha2", "http://runtimeconditions.io/extensions/rc/common-integrations:v1alpha2", 1)
+	profile := strings.Replace(validProfile, "https://example.test/dummy/alpha:v1", "http://example.test/dummy/alpha:v1", 1)
 	server := &definitionServer{}
 	_, err := runProfileValidate(t, server, profile)
 	if err == nil || !strings.Contains(err.Error(), "only https") {
@@ -120,7 +138,7 @@ func TestValidateDownloadsOnlyOverHTTPS(t *testing.T) {
 }
 
 func TestValidateReadsLocalDefinitionsWithoutTheNetworkWhenACatalogIsGiven(t *testing.T) {
-	stderr, err := runProfileValidate(t, refusingTransport{}, validHTTP, "--catalog", fixtureRoot)
+	stderr, err := runProfileValidate(t, refusingTransport{}, validProfile, "--catalog", fixtureRoot)
 	if err != nil {
 		t.Fatalf("a valid profile was rejected with a local catalog: %v", err)
 	}
@@ -131,7 +149,7 @@ func TestValidateReadsLocalDefinitionsWithoutTheNetworkWhenACatalogIsGiven(t *te
 
 func TestValidateReadsTheProfileFromAFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profile.yaml")
-	if err := os.WriteFile(path, []byte(validHTTP), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(validProfile), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	api := linkedProfileValidateAPI()

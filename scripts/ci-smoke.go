@@ -168,6 +168,29 @@ func smoke(o options) error {
 			}
 		}
 	}
+	// The profile just generated has to pass rc's own validator too, which checks it against the core
+	// schema embedded in this build and against the definitions of the extensions it declares.
+	validated, err := rc(0, "profile", "validate", output)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(validated.stderr, "profile validated") {
+		return fmt.Errorf("the generated profile was not validated: %+v", validated)
+	}
+	withoutMetadata := filepath.Join(workload, "profile-without-metadata.yaml")
+	if err := os.WriteFile(withoutMetadata, []byte(strings.Replace(expected, "metadata:\n    name: ci-fixture\n", "", 1)), 0644); err != nil {
+		return err
+	}
+	rejected, err := rc(1, "profile", "validate", withoutMetadata)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(rejected.stderr, "core profile schema") || !strings.Contains(rejected.stderr, "metadata") {
+		return fmt.Errorf("a profile without metadata must fail the core schema: %+v", rejected)
+	}
+	if err := os.Remove(withoutMetadata); err != nil {
+		return err
+	}
 	source, err := os.ReadFile(filepath.Join(workload, "main.go"))
 	if err != nil {
 		return err

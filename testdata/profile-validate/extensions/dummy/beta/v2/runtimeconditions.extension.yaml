@@ -1,0 +1,21 @@
+apiVersion: runtimeconditions.io/v1alpha1
+kind: RuntimeConditionsExtensionDefinition
+metadata:
+  id: https://example.test/dummy/beta/v2/runtimeconditions.extension.yaml
+  version: v2
+spec:
+  dependencies: [https://example.test/dummy/alpha/v1/runtimeconditions.extension.yaml]
+  kinds:
+  - name: gadget
+  interfaceTypes:
+  - {name: strict, targetKind: gadget}
+  - {name: objects, targetKind: gadget}
+  interfaceFields:
+  - {name: operations, targetKind: gadget, targetType: strict}
+  - {name: operations, targetKind: gadget, targetType: objects}
+  conditionFields:
+  - {name: config, appliesToKinds: [gadget]}
+  fieldValues:
+  - {field: 'interface.operations[]', targetKind: gadget, targetType: strict, values: [read, write]}
+  - {field: 'interface.operations[].action', targetKind: gadget, targetType: objects, values: [open, close]}
+  - {field: 'config.env[].property', targetKind: gadget, targetType: strict, values: [url]}
