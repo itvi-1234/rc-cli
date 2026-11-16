@@ -125,9 +125,12 @@ def main():
                 env = dict(os.environ, CGO_ENABLED="0", GOOS=goos, GOARCH=goarch)
                 binary = work / target / "bin/rc"
                 binary.parent.mkdir(parents=True)
+                # The core schema is embedded twice: for the linked Go profiler and for rc's own validator.
+                # scripts/build.go sets the same two variables.
+                encoded_schema = base64.b64encode(core_schema).decode("ascii")
                 linker_flags = "-X main.version=" + args.version + " -X main.commit=" + args.commit + \
-                    " -X github.com/runtimeconditions/go-rc-profiler/extensioncheck.installedCoreSchemaBase64=" + \
-                    base64.b64encode(core_schema).decode("ascii")
+                    " -X github.com/runtimeconditions/go-rc-profiler/extensioncheck.installedCoreSchemaBase64=" + encoded_schema + \
+                    " -X github.com/runtimeconditions/rc-cli/internal/validate.coreSchemaBase64=" + encoded_schema
                 run(["go", "build", "-trimpath", "-buildvcs=false", "-ldflags", linker_flags,
                      "-o", str(binary), "./cmd/rc"], env=env)
                 prefix = work / target / "prefix"
