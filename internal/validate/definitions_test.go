@@ -298,3 +298,27 @@ func TestAnInterfaceFieldOfAnotherInterfaceTypeIsRejectedByTheVocabularyAlone(t 
 		t.Fatalf("expected the field to be rejected for the listy widget, got %v", err)
 	}
 }
+
+func TestAnEmptyConditionsListIsValid(t *testing.T) {
+	roots := catalogWith(t, map[string]string{"a.yaml": definition(extA, "v1", "  kinds: [{name: a}]\n")})
+	body := coreHead + "metadata: {name: p}\nworkload: {uri: 'https://example.test/p'}\n"
+	for name, profile := range map[string]string{
+		"with no extensions":         body + "extensions: []\nconditions: []\n",
+		"with an extension declared": body + "extensions: [https://example.test/x/a:v1]\nconditions: []\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := Profile([]byte(profile), roots); err != nil {
+				t.Fatalf("a profile with an empty conditions list was rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestConditionsHaveToDeclareExtensionsButOnlyWhenThereAreSome(t *testing.T) {
+	roots := catalogWith(t, map[string]string{"a.yaml": definition(extA, "v1", "  kinds: [{name: a}]\n  interfaceTypes: [{name: t, targetKind: a}]\n")})
+	body := coreHead + "metadata: {name: p}\nworkload: {uri: 'https://example.test/p'}\n"
+	withCondition := body + "extensions: []\nconditions:\n- {kind: a, interface: {type: t}}\n"
+	if err := Profile([]byte(withCondition), roots); err == nil {
+		t.Fatal("a condition with no declared extensions was accepted")
+	}
+}
