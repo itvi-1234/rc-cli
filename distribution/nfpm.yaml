@@ -12,6 +12,7 @@ homepage: https://github.com/runtimeconditions/rc-cli
 license: MIT
 suggests:
   - rc-profiler-typescript
+  - rc-profiler-java
 contents:
   - src: usr
     dst: /usr

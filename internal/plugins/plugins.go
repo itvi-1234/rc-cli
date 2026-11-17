@@ -45,8 +45,19 @@ var TypeScript = Language{
 	InstallHint: "npm install --global @runtimeconditions/typescript-profiler",
 }
 
+// Java is the Java profiler, a jar that the rc-profiler-java launcher runs on the JDK named by RC_JAVA_HOME or
+// JAVA_HOME, or the one bundled in its system package, or java on PATH. It lists no runtime, because the launcher
+// looks for the JDK itself and says what is missing, so rc cannot tell from PATH alone whether one is there.
+var Java = Language{
+	ID:          "java",
+	Display:     "Java",
+	Executables: []string{"rc-profiler-java"},
+	OverrideEnv: "RC_JAVA_PROFILER",
+	InstallHint: "download rc-profiler-java from https://github.com/runtimeconditions/java-rc-profiler/releases and put it on PATH",
+}
+
 // Languages returns the optional languages rc supports.
-func Languages() []Language { return []Language{TypeScript} }
+func Languages() []Language { return []Language{TypeScript, Java} }
 
 // Finder looks up executables. Tests replace both functions.
 type Finder struct {

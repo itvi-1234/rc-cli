@@ -145,3 +145,38 @@ func TestDescribeRunsARealExecutable(t *testing.T) {
 		t.Fatalf("%+v %v", info, err)
 	}
 }
+
+func TestJavaIsFoundByItsLauncherAndNeedsNoRuntimeOnPath(t *testing.T) {
+	// The launcher picks the JDK itself, so java need not be on PATH for rc to run it.
+	found, err := finder(map[string]string{"rc-profiler-java": "/usr/bin/rc-profiler-java"}, nil).Find(Java)
+	if err != nil || found.Path != "/usr/bin/rc-profiler-java" || found.Origin != "path" {
+		t.Fatalf("%+v %v", found, err)
+	}
+	if got := finder(map[string]string{"rc-profiler-java": "/usr/bin/rc-profiler-java"}, nil).MissingRuntime(Java); got != "" {
+		t.Fatalf("Java lists no runtime, got %q", got)
+	}
+	// Only the launcher counts; the jar's own name is not an executable.
+	if _, err := finder(map[string]string{"runtimeconditions-java-profiler": "/usr/bin/x"}, nil).Find(Java); err == nil {
+		t.Fatal("found an add-on that is not the launcher")
+	}
+}
+
+func TestJavaMissingSaysHowToInstallIt(t *testing.T) {
+	_, err := finder(map[string]string{}, nil).Find(Java)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"Java profiler is not installed", "rc-profiler-java", "install it with: " + Java.InstallHint, "RC_JAVA_PROFILER"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%q is missing from %q", want, err)
+		}
+	}
+}
+
+func TestJavaOverrideNamesAnAbsoluteExecutable(t *testing.T) {
+	installed := map[string]string{"/opt/java/rc-profiler-java": "/opt/java/rc-profiler-java"}
+	found, err := finder(installed, map[string]string{Java.OverrideEnv: "/opt/java/rc-profiler-java"}).Find(Java)
+	if err != nil || found.Path != "/opt/java/rc-profiler-java" || found.Origin != "override" {
+		t.Fatalf("%+v %v", found, err)
+	}
+}
