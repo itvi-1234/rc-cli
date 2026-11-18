@@ -124,7 +124,7 @@ func TestGoValidationLibraryCalls(t *testing.T) {
 func TestGoUsageAndHelp(t *testing.T) {
 	for _, args := range [][]string{
 		{"profile", "generate", "--unknown"}, {"profile", "generate", "-dir", "."},
-		{"profile", "go", "generate", "extra"}, {"profile", "java", "generate"},
+		{"profile", "go", "generate", "extra"}, {"profile", "ruby", "generate"},
 		{"profile", "validate-extension"}, {"profile", "go", "validate-extension", "--package", ""},
 	} {
 		code, out, errOut := invoke(t, args...)

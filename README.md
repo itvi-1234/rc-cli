@@ -99,19 +99,27 @@ generation leaves an existing `--out` file unchanged.
 Other languages run a separate add-on that `rc` finds on `PATH`. It can come from the
 language's own tooling or from a system package, and `rc` does not care which. The
 TypeScript profiler is on npm for developers who want it in their npm scripts:
-`npm install --global @runtimeconditions/typescript-profiler`. System packages for Homebrew,
+`npm install --global @runtimeconditions/typescript-profiler`. The Java profiler is a jar that its
+launcher, `rc-profiler-java`, runs; download it from the
+[releases](https://github.com/runtimeconditions/java-rc-profiler/releases) of
+`runtimeconditions/java-rc-profiler` and put the launcher on `PATH`. System packages for Homebrew,
 apt, and yum, so that `rc` and its add-ons install the same way on a build server, are planned.
 
 | Command | Purpose |
 | --- | --- |
 | `rc profile typescript <command> [flags]` | Run the installed TypeScript profiler. |
+| `rc profile java <command> [flags]` | Run the installed Java profiler. |
 | `rc plugins list [--output yaml]` | Show the Go profiler and each add-on's status, version, and path. |
 
-Everything after `typescript` goes to the add-on unchanged, so it keeps its own flags
-(for example `--project` instead of `--dir`). `rc` looks for `rc-profiler-typescript`, then
-`runtimeconditions-typescript-profiler`, on `PATH`; `RC_TYPESCRIPT_PROFILER` can name an
-absolute path instead. It runs the add-on only if `--version --json` lists the core profile
-schema `rc` targets (0.4.0). The add-on's output and exit status pass through.
+Everything after `typescript` or `java` goes to the add-on unchanged, so it keeps its own flags
+(for example `--project` instead of `--dir`, and `--classpath` for Java). `rc` looks for
+`rc-profiler-typescript`, then `runtimeconditions-typescript-profiler`, or `rc-profiler-java`, on `PATH`;
+`RC_TYPESCRIPT_PROFILER` or `RC_JAVA_PROFILER` can name an absolute path instead. It runs the add-on only
+if `--version --json` lists the core profile schema `rc` targets (0.4.0). The add-on's output and exit
+status pass through.
+
+The Java launcher chooses the JDK, not `rc`: `RC_JAVA_HOME`, then `JAVA_HOME`, then the runtime bundled
+in its system package, then `java` on `PATH`. It needs JDK 17 or newer and says so when none is found.
 
 ## Binding commands
 

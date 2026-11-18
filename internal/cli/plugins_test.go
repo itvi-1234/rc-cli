@@ -34,6 +34,8 @@ func (f *fakeRunner) Run(_ context.Context, spec process.Spec) (int, error) {
 
 const readyVersion = `{"name":"@runtimeconditions/typescript-profiler","version":"0.2.0","coreSchemas":["0.4.0"]}`
 
+const javaVersion = `{"name":"runtimeconditions-java-profiler","version":"0.1.0","coreSchemas":["0.4.0"]}`
+
 func deps(runner process.Runner, installed ...string) Dependencies {
 	present := map[string]bool{}
 	for _, name := range installed {
@@ -159,10 +161,19 @@ func TestPluginsListReportsEveryStatus(t *testing.T) {
 		t.Fatalf("an add-on with its own runtime is ready without node: %+v", packaged[1])
 	}
 	ready := read(deps(&fakeRunner{version: readyVersion}, "rc-profiler-typescript", "node"))
-	if len(ready) != 2 || ready[0].Language != "go" || ready[0].Status != "built-in" ||
+	if len(ready) != 3 || ready[0].Language != "go" || ready[0].Status != "built-in" ||
 		ready[1].Language != "typescript" || ready[1].Status != "ready" || ready[1].Version != "0.2.0" ||
-		ready[1].Path != "/usr/bin/rc-profiler-typescript" || ready[1].Origin != "path" {
+		ready[1].Path != "/usr/bin/rc-profiler-typescript" || ready[1].Origin != "path" ||
+		ready[2].Language != "java" || ready[2].Status != "missing" {
 		t.Fatalf("%+v", ready)
+	}
+	java := read(deps(&fakeRunner{version: javaVersion}, "rc-profiler-java"))
+	if java[2].Language != "java" || java[2].Status != "ready" || java[2].Version != "0.1.0" ||
+		java[2].Path != "/usr/bin/rc-profiler-java" || java[2].Origin != "path" {
+		t.Fatalf("a Java launcher on PATH is ready without java on PATH: %+v", java[2])
+	}
+	if incompatible := read(deps(&fakeRunner{version: `{"name":"x","version":"1","coreSchemas":["0.3.0"]}`}, "rc-profiler-java")); incompatible[2].Status != "incompatible" {
+		t.Fatalf("%+v", incompatible[2])
 	}
 	for status, d := range map[string]Dependencies{
 		"missing":         deps(&fakeRunner{}),
@@ -179,15 +190,16 @@ func TestPluginsListReportsEveryStatus(t *testing.T) {
 func TestPluginsListTextAndHelp(t *testing.T) {
 	code, out, _ := run(t, deps(&fakeRunner{version: readyVersion}, "rc-profiler-typescript", "node"), "plugins", "list")
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if code != 0 || len(lines) != 3 || !strings.HasPrefix(lines[0], "LANGUAGE") ||
-		!slices.Equal(strings.Fields(lines[2]), []string{"typescript", "ready", "0.2.0", "/usr/bin/rc-profiler-typescript"}) {
+	if code != 0 || len(lines) != 4 || !strings.HasPrefix(lines[0], "LANGUAGE") ||
+		!slices.Equal(strings.Fields(lines[2]), []string{"typescript", "ready", "0.2.0", "/usr/bin/rc-profiler-typescript"}) ||
+		!slices.Equal(strings.Fields(lines[3]), []string{"java", "missing"}) {
 		t.Fatalf("code=%d %q", code, out)
 	}
 	if code, _, errOut := run(t, deps(&fakeRunner{}), "plugins", "list", "--output", "json"); code != 2 || !strings.Contains(errOut, "unsupported output format") {
 		t.Fatalf("code=%d %q", code, errOut)
 	}
 	code, out, _ = run(t, deps(&fakeRunner{}), "profile", "--help")
-	if code != 0 || !strings.Contains(out, "typescript") || !strings.Contains(out, "go ") {
+	if code != 0 || !strings.Contains(out, "typescript") || !strings.Contains(out, "java") || !strings.Contains(out, "go ") {
 		t.Fatalf("profile help %q", out)
 	}
 }
@@ -206,5 +218,37 @@ func TestCoreSchemaVersionMatchesTheComponentLock(t *testing.T) {
 	}
 	if err := yaml.Unmarshal(data, &lock); err != nil || lock.GoProfiler.CoreSchema.Version != coreSchemaVersion {
 		t.Fatalf("lock says %q, rc targets %q (%v)", lock.GoProfiler.CoreSchema.Version, coreSchemaVersion, err)
+	}
+}
+
+func TestJavaAddOnReceivesItsArgumentsUnchangedAndItsOutputPassesThrough(t *testing.T) {
+	runner := &fakeRunner{version: javaVersion, output: "profile: yaml\n"}
+	args := []string{"generate", "--project", "./svc", "--classpath", "a.jar:b.jar", "--name", "orders", "--workload-uri", "https://example.com/o", "--", "--odd", "a b"}
+	code, out, errOut := run(t, deps(runner, "rc-profiler-java"), append([]string{"profile", "java"}, args...)...)
+	if code != 0 || out != "profile: yaml\n" || errOut != "" {
+		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].Path != "/usr/bin/rc-profiler-java" || !slices.Equal(runner.calls[0].Args, args) {
+		t.Fatalf("calls: %+v", runner.calls)
+	}
+}
+
+func TestJavaAddOnThatIsNotInstalledSaysHowToGetIt(t *testing.T) {
+	runner := &fakeRunner{}
+	code, _, errOut := run(t, deps(runner, "node"), "profile", "java", "generate")
+	if code != 1 || strings.Count(errOut, "rc:") != 1 || !strings.Contains(errOut, "Java profiler is not installed") ||
+		!strings.Contains(errOut, "https://github.com/runtimeconditions/java-rc-profiler/releases") || strings.Contains(errOut, "Usage:") {
+		t.Fatalf("code=%d %q", code, errOut)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("the add-on ran: %+v", runner.calls)
+	}
+}
+
+func TestJavaAddOnForAnotherCoreSchemaIsNotRun(t *testing.T) {
+	runner := &fakeRunner{version: `{"name":"runtimeconditions-java-profiler","version":"0.1.0","coreSchemas":["0.3.0"]}`}
+	code, _, errOut := run(t, deps(runner, "rc-profiler-java"), "profile", "java", "generate")
+	if code != 1 || !strings.Contains(errOut, "0.4.0") || len(runner.calls) != 0 {
+		t.Fatalf("code=%d %q calls=%+v", code, errOut, runner.calls)
 	}
 }
